@@ -10,6 +10,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { name, nic, ward, district, municipalCouncil } = req.body;
 
+    // Validate required fields
+    if (!name || !nic || !ward || !district || !municipalCouncil) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields'
+      });
+    }
+
+    // Verify the path exists before creating the supervisor
+    const wardRef = adminDb
+      .collection('municipalCouncils')
+      .doc(municipalCouncil)
+      .collection('Districts')
+      .doc(district)
+      .collection('Wards')
+      .doc(ward);
+
+    const wardDoc = await wardRef.get();
+    if (!wardDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: `Path not found: ${municipalCouncil}/${district}/${ward}`
+      });
+    }
+
     // Generate supervisor ID
     const supervisorId = `SUP${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
     
@@ -24,22 +49,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Create supervisor document
-    await adminDb
-      .collection('municipalCouncils')
-      .doc(municipalCouncil)
-      .collection('Districts')
-      .doc(district)
-      .collection('Wards')
-      .doc(ward)
-      .collection('supervisors')
-      .doc(supervisorId)
-      .set({
-        name,
-        nic,
-        supervisorId,
-        createdAt: admin.firestore.Timestamp.now(),
-        status: 'active'
-      });
+    await wardRef.collection('supervisors').doc(supervisorId).set({
+      name,
+      nic,
+      supervisorId,
+      createdAt: admin.firestore.Timestamp.now(),
+      status: 'active'
+    });
 
     return res.status(200).json({
       success: true,
@@ -51,11 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating supervisor:', error);
     return res.status(500).json({
       success: false,
-      error: 'Failed to create supervisor'
+      error: error.message || 'Failed to create supervisor'
     });
   }
 }
