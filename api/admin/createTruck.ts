@@ -8,13 +8,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { driverName, nic, supervisorId, ward, district, municipalCouncil } =
-      req.body;
+    const {
+      driverName,
+      nic,
+      licensePlate,
+      supervisorId,
+      ward,
+      district,
+      municipalCouncil,
+    } = req.body;
 
     // Validate required fields
     if (
       !driverName ||
       !nic ||
+      !licensePlate ||
       !supervisorId ||
       !ward ||
       !district ||
@@ -26,7 +34,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Verify the supervisor exists before creating the truck
+    // Validate NIC format
+    const nicRegex = /^[0-9]{12}$/;
+    if (!nicRegex.test(nic)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid NIC format. NIC should be 12 digits",
+      });
+    }
+
+    // Validate license plate format (WP XX-YYYY)
+    const licensePlateRegex = /^WP [A-Z]{2}-\d{4}$/;
+    if (!licensePlateRegex.test(licensePlate)) {
+      return res.status(400).json({
+        success: false,
+        error:
+          'Invalid license plate format. Format should be "WP XX-YYYY" (e.g., WP AB-1234)',
+      });
+    }
+
+    // Check for duplicate NIC across all trucks
+    const duplicateNicSnapshot = await adminDb
+      .collectionGroup("trucks")
+      .where("nic", "==", nic)
+      .get();
+
+    if (!duplicateNicSnapshot.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A truck driver with this NIC already exists",
+      });
+    }
+
+    // Check for duplicate license plate
+    const duplicateLicenseSnapshot = await adminDb
+      .collectionGroup("trucks")
+      .where("licensePlate", "==", licensePlate)
+      .get();
+
+    if (!duplicateLicenseSnapshot.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A truck with this license plate already exists",
+      });
+    }
+
+    // Verify the supervisor exists
     const supervisorRef = adminDb
       .collection("municipalCouncils")
       .doc(municipalCouncil)
@@ -42,6 +95,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({
         success: false,
         error: `Supervisor not found: ${supervisorId} in path ${municipalCouncil}/${district}/${ward}`,
+      });
+    }
+
+    // Check for duplicate driver name under the same supervisor
+    const duplicateNameSnapshot = await supervisorRef
+      .collection("trucks")
+      .where("driverName", "==", driverName)
+      .get();
+
+    if (!duplicateNameSnapshot.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A driver with this name already exists under this supervisor",
       });
     }
 
@@ -75,10 +141,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await supervisorRef.collection("trucks").doc(truckId).set({
       driverName,
       nic,
+      licensePlate,
       truckId,
       supervisorId,
       createdAt: admin.firestore.Timestamp.now(),
       status: "active",
+      ward,
+      district,
+      municipalCouncil,
     });
 
     return res.status(200).json({
@@ -88,6 +158,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         password: initialPassword,
         driverName,
         nic,
+        licensePlate,
         supervisorId,
       },
     });
