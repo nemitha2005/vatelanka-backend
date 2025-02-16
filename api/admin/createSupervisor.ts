@@ -1,20 +1,26 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, adminAuth } from "../config/firebase-admin";
 import * as admin from "firebase-admin";
+import { cors } from "../middleware/cors";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function createSupervisorHandler(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
     const { name, nic, ward, district, municipalCouncil } = req.body;
 
     if (!name || !nic || !ward || !district || !municipalCouncil) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "Missing required fields",
       });
+      return;
     }
 
     const wardRef = adminDb
@@ -27,10 +33,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const wardDoc = await wardRef.get();
     if (!wardDoc.exists) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: `Path not found: ${municipalCouncil}/${district}/${ward}`,
       });
+      return;
     }
 
     const nameQuery = await wardRef
@@ -39,20 +46,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .get();
 
     if (!nameQuery.empty) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "A supervisor with this name already exists in this ward",
       });
+      return;
     }
 
     const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
     const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
 
     if (nicSnapshot.exists) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "A supervisor with this NIC already exists",
       });
+      return;
     }
 
     const supervisorId = `SUP${Math.random()
@@ -88,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ward,
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: {
         supervisorId,
@@ -99,9 +108,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error("Error creating supervisor:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: error.message || "Failed to create supervisor",
     });
   }
 }
+
+export default cors(createSupervisorHandler);

@@ -1,10 +1,15 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, adminAuth } from "../config/firebase-admin";
 import * as admin from "firebase-admin";
+import { cors } from "../middleware/cors";
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+async function createTruckHandler(
+  req: VercelRequest,
+  res: VercelResponse
+): Promise<void> {
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.status(405).json({ error: "Method not allowed" });
+    return;
   }
 
   try {
@@ -27,10 +32,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !district ||
       !municipalCouncil
     ) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "Missing required fields",
       });
+      return;
     }
 
     const supervisorRef = adminDb
@@ -45,20 +51,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const supervisorDoc = await supervisorRef.get();
     if (!supervisorDoc.exists) {
-      return res.status(404).json({
+      res.status(404).json({
         success: false,
         error: `Supervisor not found: ${supervisorId} in path ${municipalCouncil}/${district}/${ward}`,
       });
+      return;
     }
 
     const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
 
     const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
     if (nicSnapshot.exists) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "A driver with this NIC already exists",
       });
+      return;
     }
 
     const plateSnapshot = await mcRef
@@ -66,10 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .doc(numberPlate)
       .get();
     if (plateSnapshot.exists) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: "A truck with this number plate already exists",
       });
+      return;
     }
 
     const truckId = `TRUCK${Math.random()
@@ -88,10 +97,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } catch (authError: any) {
       console.error("Error creating auth user:", authError);
-      return res.status(500).json({
+      res.status(500).json({
         success: false,
         error: "Failed to create authentication account for truck driver",
       });
+      return;
     }
 
     await mcRef.collection("allNICs").doc(nic).set({
@@ -124,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ward,
     });
 
-    return res.status(200).json({
+    res.status(200).json({
       success: true,
       data: {
         truckId,
@@ -137,9 +147,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error("Error creating truck:", error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       error: error.message || "Failed to create truck",
     });
   }
 }
+
+export default cors(createTruckHandler);
