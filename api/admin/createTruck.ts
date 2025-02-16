@@ -51,36 +51,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const nameQuery = await adminDb
-      .collectionGroup("trucks")
-      .where("driverName", "==", driverName)
-      .get();
+    const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
 
-    if (!nameQuery.empty) {
+    const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
+    if (nicSnapshot.exists) {
       return res.status(400).json({
         success: false,
-        error: "A truck driver with this name already exists",
+        error: "A driver with this NIC already exists",
       });
     }
 
-    const nicQuery = await adminDb
-      .collectionGroup("trucks")
-      .where("nic", "==", nic)
+    const plateSnapshot = await mcRef
+      .collection("allPlates")
+      .doc(numberPlate)
       .get();
-
-    if (!nicQuery.empty) {
-      return res.status(400).json({
-        success: false,
-        error: "A truck driver with this NIC already exists",
-      });
-    }
-
-    const numberPlateQuery = await adminDb
-      .collectionGroup("trucks")
-      .where("numberPlate", "==", numberPlate)
-      .get();
-
-    if (!numberPlateQuery.empty) {
+    if (plateSnapshot.exists) {
       return res.status(400).json({
         success: false,
         error: "A truck with this number plate already exists",
@@ -108,6 +93,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: "Failed to create authentication account for truck driver",
       });
     }
+
+    await mcRef.collection("allNICs").doc(nic).set({
+      type: "truck",
+      truckId,
+      municipalCouncil,
+      district,
+      ward,
+      supervisorId,
+    });
+
+    await mcRef.collection("allPlates").doc(numberPlate).set({
+      truckId,
+      municipalCouncil,
+      district,
+      ward,
+      supervisorId,
+    });
 
     await supervisorRef.collection("trucks").doc(truckId).set({
       driverName,

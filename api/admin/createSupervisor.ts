@@ -45,12 +45,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const nicQuery = await adminDb
-      .collectionGroup("supervisors")
-      .where("nic", "==", nic)
-      .get();
+    const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
+    const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
 
-    if (!nicQuery.empty) {
+    if (nicSnapshot.exists) {
       return res.status(400).json({
         success: false,
         error: "A supervisor with this NIC already exists",
@@ -69,6 +67,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uid: supervisorId,
       password: initialPassword,
       displayName: name,
+    });
+
+    await mcRef.collection("allNICs").doc(nic).set({
+      type: "supervisor",
+      supervisorId,
+      municipalCouncil,
+      district,
+      ward,
     });
 
     await wardRef.collection("supervisors").doc(supervisorId).set({
