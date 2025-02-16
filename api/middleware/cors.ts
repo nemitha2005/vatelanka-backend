@@ -2,8 +2,9 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 const allowedOrigins = [
   'http://localhost:3000',
-  'https://vatelanka.lk',
-  'https://vate-lanka-lk.vercel.app'
+  'https://www.vatelanka.lk',
+  'https://vate-lanka-lk.vercel.app',
+  'https://www.vatelanka.lk/adminpanel'
 ];
 
 type VercelHandler = (
