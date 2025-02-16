@@ -27,7 +27,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Check for duplicate NIC across all supervisors in the municipal council
+    const wardRef = adminDb
+      .collection("municipalCouncils")
+      .doc(municipalCouncil.toLowerCase())
+      .collection("Districts")
+      .doc(district)
+      .collection("Wards")
+      .doc(ward);
+
+    // Verify the ward exists
+    const wardDoc = await wardRef.get();
+    if (!wardDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: `Path not found: ${municipalCouncil}/${district}/${ward}`,
+      });
+    }
+
+    // Check for duplicate NIC across all supervisors
     const duplicateNicSnapshot = await adminDb
       .collectionGroup("supervisors")
       .where("nic", "==", nic)
@@ -37,36 +54,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({
         success: false,
         error: "A supervisor with this NIC already exists",
-      });
-    }
-
-    // Check for duplicate name in the same ward
-    const wardRef = adminDb
-      .collection("municipalCouncils")
-      .doc(municipalCouncil)
-      .collection("Districts")
-      .doc(district)
-      .collection("Wards")
-      .doc(ward);
-
-    const duplicateNameSnapshot = await wardRef
-      .collection("supervisors")
-      .where("name", "==", name)
-      .get();
-
-    if (!duplicateNameSnapshot.empty) {
-      return res.status(400).json({
-        success: false,
-        error: "A supervisor with this name already exists in this ward",
-      });
-    }
-
-    // Verify the ward exists
-    const wardDoc = await wardRef.get();
-    if (!wardDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        error: `Path not found: ${municipalCouncil}/${district}/${ward}`,
       });
     }
 
@@ -105,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: "active",
       ward,
       district,
-      municipalCouncil,
+      municipalCouncil: municipalCouncil.toLowerCase(),
     });
 
     return res.status(200).json({

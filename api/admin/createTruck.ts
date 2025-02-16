@@ -53,6 +53,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    // Convert municipalCouncil to lowercase for consistency
+    const normalizedMunicipalCouncil = municipalCouncil.toLowerCase();
+
     // Check for duplicate NIC across all trucks
     const duplicateNicSnapshot = await adminDb
       .collectionGroup("trucks")
@@ -79,10 +82,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Verify the supervisor exists
+    // Verify the supervisor exists with correct path handling
     const supervisorRef = adminDb
       .collection("municipalCouncils")
-      .doc(municipalCouncil)
+      .doc(normalizedMunicipalCouncil)
       .collection("Districts")
       .doc(district)
       .collection("Wards")
@@ -94,7 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!supervisorDoc.exists) {
       return res.status(404).json({
         success: false,
-        error: `Supervisor not found: ${supervisorId} in path ${municipalCouncil}/${district}/${ward}`,
+        error: `Supervisor not found: ${supervisorId} in path ${normalizedMunicipalCouncil}/${district}/${ward}`,
       });
     }
 
@@ -137,7 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Create truck document
+    // Create truck document with normalized municipalCouncil
     await supervisorRef.collection("trucks").doc(truckId).set({
       driverName,
       nic,
@@ -148,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: "active",
       ward,
       district,
-      municipalCouncil,
+      municipalCouncil: normalizedMunicipalCouncil,
     });
 
     return res.status(200).json({
