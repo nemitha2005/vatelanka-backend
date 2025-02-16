@@ -18,42 +18,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Validate NIC format
-    const nicRegex = /^[0-9]{12}$/;
-    if (!nicRegex.test(nic)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid NIC format. NIC should be 12 digits",
-      });
-    }
-
+    // Verify the path exists before creating the supervisor
     const wardRef = adminDb
       .collection("municipalCouncils")
-      .doc(municipalCouncil.toLowerCase())
+      .doc(municipalCouncil)
       .collection("Districts")
       .doc(district)
       .collection("Wards")
       .doc(ward);
 
-    // Verify the ward exists
     const wardDoc = await wardRef.get();
     if (!wardDoc.exists) {
       return res.status(404).json({
         success: false,
         error: `Path not found: ${municipalCouncil}/${district}/${ward}`,
-      });
-    }
-
-    // Check for duplicate NIC across all supervisors
-    const duplicateNicSnapshot = await adminDb
-      .collectionGroup("supervisors")
-      .where("nic", "==", nic)
-      .get();
-
-    if (!duplicateNicSnapshot.empty) {
-      return res.status(400).json({
-        success: false,
-        error: "A supervisor with this NIC already exists",
       });
     }
 
@@ -68,20 +46,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .toString(36)
       .substr(2, 4)}`;
 
-    try {
-      // Create auth user
-      const userRecord = await adminAuth.createUser({
-        uid: supervisorId,
-        password: initialPassword,
-        displayName: name,
-      });
-    } catch (authError: any) {
-      console.error("Error creating auth user:", authError);
-      return res.status(500).json({
-        success: false,
-        error: "Failed to create authentication account for supervisor",
-      });
-    }
+    // Create auth user
+    const userRecord = await adminAuth.createUser({
+      uid: supervisorId,
+      password: initialPassword,
+      displayName: name,
+    });
 
     // Create supervisor document
     await wardRef.collection("supervisors").doc(supervisorId).set({
@@ -90,9 +60,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       supervisorId,
       createdAt: admin.firestore.Timestamp.now(),
       status: "active",
-      ward,
-      district,
-      municipalCouncil: municipalCouncil.toLowerCase(),
     });
 
     return res.status(200).json({
