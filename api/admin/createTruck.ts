@@ -8,13 +8,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { driverName, nic, supervisorId, ward, district, municipalCouncil } =
-      req.body;
+    const {
+      driverName,
+      nic,
+      numberPlate,
+      supervisorId,
+      ward,
+      district,
+      municipalCouncil,
+    } = req.body;
 
-    // Validate required fields
     if (
       !driverName ||
       !nic ||
+      !numberPlate ||
       !supervisorId ||
       !ward ||
       !district ||
@@ -26,7 +33,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Verify the supervisor exists before creating the truck
     const supervisorRef = adminDb
       .collection("municipalCouncils")
       .doc(municipalCouncil)
@@ -45,19 +51,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Generate truck ID
+    const nameQuery = await adminDb
+      .collectionGroup("trucks")
+      .where("driverName", "==", driverName)
+      .get();
+
+    if (!nameQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A truck driver with this name already exists",
+      });
+    }
+
+    const nicQuery = await adminDb
+      .collectionGroup("trucks")
+      .where("nic", "==", nic)
+      .get();
+
+    if (!nicQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A truck driver with this NIC already exists",
+      });
+    }
+
+    const numberPlateQuery = await adminDb
+      .collectionGroup("trucks")
+      .where("numberPlate", "==", numberPlate)
+      .get();
+
+    if (!numberPlateQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A truck with this number plate already exists",
+      });
+    }
+
     const truckId = `TRUCK${Math.random()
       .toString(36)
       .substr(2, 6)
       .toUpperCase()}`;
-
-    // Generate initial password
     const initialPassword = `${nic.substr(-4)}${Math.random()
       .toString(36)
       .substr(2, 4)}`;
 
     try {
-      // Create auth user
       const userRecord = await adminAuth.createUser({
         uid: truckId,
         password: initialPassword,
@@ -71,14 +109,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Create truck document
     await supervisorRef.collection("trucks").doc(truckId).set({
       driverName,
       nic,
+      numberPlate,
       truckId,
       supervisorId,
       createdAt: admin.firestore.Timestamp.now(),
       status: "active",
+      municipalCouncil,
+      district,
+      ward,
     });
 
     return res.status(200).json({
@@ -88,6 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         password: initialPassword,
         driverName,
         nic,
+        numberPlate,
         supervisorId,
       },
     });

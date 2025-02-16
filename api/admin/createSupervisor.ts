@@ -10,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { name, nic, ward, district, municipalCouncil } = req.body;
 
-    // Validate required fields
     if (!name || !nic || !ward || !district || !municipalCouncil) {
       return res.status(400).json({
         success: false,
@@ -18,7 +17,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Verify the path exists before creating the supervisor
     const wardRef = adminDb
       .collection("municipalCouncils")
       .doc(municipalCouncil)
@@ -35,31 +33,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // Generate supervisor ID
+    const nameQuery = await wardRef
+      .collection("supervisors")
+      .where("name", "==", name)
+      .get();
+
+    if (!nameQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A supervisor with this name already exists in this ward",
+      });
+    }
+
+    const nicQuery = await adminDb
+      .collectionGroup("supervisors")
+      .where("nic", "==", nic)
+      .get();
+
+    if (!nicQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        error: "A supervisor with this NIC already exists",
+      });
+    }
+
     const supervisorId = `SUP${Math.random()
       .toString(36)
       .substr(2, 6)
       .toUpperCase()}`;
-
-    // Generate initial password
     const initialPassword = `${nic.substr(-4)}${Math.random()
       .toString(36)
       .substr(2, 4)}`;
 
-    // Create auth user
     const userRecord = await adminAuth.createUser({
       uid: supervisorId,
       password: initialPassword,
       displayName: name,
     });
 
-    // Create supervisor document
     await wardRef.collection("supervisors").doc(supervisorId).set({
       name,
       nic,
       supervisorId,
       createdAt: admin.firestore.Timestamp.now(),
       status: "active",
+      municipalCouncil,
+      district,
+      ward,
     });
 
     return res.status(200).json({
