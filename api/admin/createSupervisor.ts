@@ -18,18 +18,17 @@ async function createSupervisorHandler(
     if (!name || !nic || !ward || !district || !municipalCouncil || !email) {
       res.status(400).json({
         success: false,
-        error:
-          "Missing required fields. Name, NIC, ward, district, municipalCouncil, and email are required.",
+        error: "Missing required fields",
       });
       return;
     }
 
+    // Input validation
     const nicRegex = /^(?:\d{12}|\d{9}[vVxX])$/;
     if (!nicRegex.test(nic)) {
       res.status(400).json({
         success: false,
-        error:
-          "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
+        error: "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
       });
       return;
     }
@@ -43,11 +42,21 @@ async function createSupervisorHandler(
       return;
     }
 
+    // Path validation
+    const correctDistrict = "District 1";  // Hardcoding the correct district name
+    if (district !== correctDistrict) {
+      res.status(400).json({
+        success: false,
+        error: `Invalid district. Only '${correctDistrict}' is currently supported.`,
+      });
+      return;
+    }
+
     const wardRef = adminDb
       .collection("municipalCouncils")
       .doc(municipalCouncil)
       .collection("Districts")
-      .doc(district)
+      .doc(correctDistrict)
       .collection("Wards")
       .doc(ward);
 
@@ -55,13 +64,13 @@ async function createSupervisorHandler(
     if (!wardDoc.exists) {
       res.status(404).json({
         success: false,
-        error: `Path not found: ${municipalCouncil}/${district}/${ward}`,
+        error: `Ward not found at path: /municipalCouncils/${municipalCouncil}/Districts/${correctDistrict}/Wards/${ward}`,
       });
       return;
     }
 
-    const globalNameQuery = await adminDb
-      .collectionGroup("supervisors")
+    // Global name uniqueness check
+    const globalNameQuery = await adminDb.collectionGroup("supervisors")
       .where("name", "==", name)
       .get();
 
@@ -74,8 +83,8 @@ async function createSupervisorHandler(
       return;
     }
 
-    const globalEmailQuery = await adminDb
-      .collectionGroup("supervisors")
+    // Global email uniqueness check
+    const globalEmailQuery = await adminDb.collectionGroup("supervisors")
       .where("email", "==", email)
       .get();
 
@@ -87,6 +96,7 @@ async function createSupervisorHandler(
       return;
     }
 
+    // Check NIC in both collections
     const supervisorNicRef = adminDb.collection("supervisorNICs").doc(nic);
     const nicSnapshot = await supervisorNicRef.get();
 
@@ -109,15 +119,12 @@ async function createSupervisorHandler(
       return;
     }
 
-    const supervisorId = `SUP${Math.random()
-      .toString(36)
-      .substr(2, 6)
-      .toUpperCase()}`;
-    const initialPassword = `${nic.substr(-4)}${Math.random()
-      .toString(36)
-      .substr(2, 4)}`;
+    // Generate IDs
+    const supervisorId = `SUP${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const initialPassword = `${nic.substr(-4)}${Math.random().toString(36).substr(2, 4)}`;
 
     try {
+      // Create auth user
       const userRecord = await adminAuth.createUser({
         uid: supervisorId,
         email: email,
@@ -127,16 +134,18 @@ async function createSupervisorHandler(
         disabled: false,
       });
 
+      // Store in NIC collection
       await supervisorNicRef.set({
         supervisorId,
         name,
         municipalCouncil,
-        district,
+        district: correctDistrict,
         ward,
         email,
         createdAt: admin.firestore.Timestamp.now(),
       });
 
+      // Store main supervisor data
       await wardRef.collection("supervisors").doc(supervisorId).set({
         name,
         nic,
@@ -145,7 +154,7 @@ async function createSupervisorHandler(
         createdAt: admin.firestore.Timestamp.now(),
         status: "active",
         municipalCouncil,
-        district,
+        district: correctDistrict,
         ward,
         passwordChangeRequired: true,
         lastPasswordChange: admin.firestore.Timestamp.now(),

@@ -24,30 +24,20 @@ async function createTruckHandler(
       email,
     } = req.body;
 
-    if (
-      !driverName ||
-      !nic ||
-      !numberPlate ||
-      !supervisorId ||
-      !ward ||
-      !district ||
-      !municipalCouncil ||
-      !email
-    ) {
+    if (!driverName || !nic || !numberPlate || !supervisorId || !ward || !district || !municipalCouncil || !email) {
       res.status(400).json({
         success: false,
-        error:
-          "Missing required fields. All fields including email are required.",
+        error: "Missing required fields",
       });
       return;
     }
 
+    // Input validation
     const nicRegex = /^(?:\d{12}|\d{9}[vVxX])$/;
     if (!nicRegex.test(nic)) {
       res.status(400).json({
         success: false,
-        error:
-          "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
+        error: "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
       });
       return;
     }
@@ -65,8 +55,17 @@ async function createTruckHandler(
     if (!plateRegex.test(numberPlate)) {
       res.status(400).json({
         success: false,
-        error:
-          "Invalid number plate format. Should be like 'XX-1234' or 'XXX-1234'",
+        error: "Invalid number plate format. Should be like 'XX-1234' or 'XXX-1234'",
+      });
+      return;
+    }
+
+    // Path validation
+    const correctDistrict = "District 1";  // Hardcoding the correct district name
+    if (district !== correctDistrict) {
+      res.status(400).json({
+        success: false,
+        error: `Invalid district. Only '${correctDistrict}' is currently supported.`,
       });
       return;
     }
@@ -75,7 +74,7 @@ async function createTruckHandler(
       .collection("municipalCouncils")
       .doc(municipalCouncil)
       .collection("Districts")
-      .doc(district)
+      .doc(correctDistrict)
       .collection("Wards")
       .doc(ward)
       .collection("supervisors")
@@ -85,13 +84,13 @@ async function createTruckHandler(
     if (!supervisorDoc.exists) {
       res.status(404).json({
         success: false,
-        error: `Supervisor not found: ${supervisorId} in path ${municipalCouncil}/${district}/${ward}`,
+        error: `Supervisor not found at path: /municipalCouncils/${municipalCouncil}/Districts/${correctDistrict}/Wards/${ward}/supervisors/${supervisorId}`,
       });
       return;
     }
 
-    const globalNameQuery = await adminDb
-      .collectionGroup("trucks")
+    // Global name uniqueness check
+    const globalNameQuery = await adminDb.collectionGroup("trucks")
       .where("driverName", "==", driverName)
       .get();
 
@@ -104,8 +103,8 @@ async function createTruckHandler(
       return;
     }
 
-    const globalEmailQuery = await adminDb
-      .collectionGroup("trucks")
+    // Global email uniqueness check
+    const globalEmailQuery = await adminDb.collectionGroup("trucks")
       .where("email", "==", email)
       .get();
 
@@ -117,6 +116,7 @@ async function createTruckHandler(
       return;
     }
 
+    // Check NIC in both collections
     const driverNicRef = adminDb.collection("driverNICs").doc(nic);
     const driverNicSnapshot = await driverNicRef.get();
 
@@ -139,6 +139,7 @@ async function createTruckHandler(
       return;
     }
 
+    // Check number plate
     const plateRef = adminDb.collection("vehiclePlates").doc(numberPlate);
     const plateSnapshot = await plateRef.get();
 
@@ -150,15 +151,12 @@ async function createTruckHandler(
       return;
     }
 
-    const truckId = `TRUCK${Math.random()
-      .toString(36)
-      .substr(2, 6)
-      .toUpperCase()}`;
-    const initialPassword = `${nic.substr(-4)}${Math.random()
-      .toString(36)
-      .substr(2, 4)}`;
+    // Generate IDs
+    const truckId = `TRUCK${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    const initialPassword = `${nic.substr(-4)}${Math.random().toString(36).substr(2, 4)}`;
 
     try {
+      // Create auth user
       const userRecord = await adminAuth.createUser({
         uid: truckId,
         email: email,
@@ -168,27 +166,30 @@ async function createTruckHandler(
         disabled: false,
       });
 
+      // Store in NIC collection
       await driverNicRef.set({
         truckId,
         driverName,
         municipalCouncil,
-        district,
+        district: correctDistrict,
         ward,
         supervisorId,
         email,
         createdAt: admin.firestore.Timestamp.now(),
       });
 
+      // Store in plates collection
       await plateRef.set({
         truckId,
         driverName,
         municipalCouncil,
-        district,
+        district: correctDistrict,
         ward,
         supervisorId,
         createdAt: admin.firestore.Timestamp.now(),
       });
 
+      // Store main truck data
       await supervisorRef.collection("trucks").doc(truckId).set({
         driverName,
         nic,
@@ -199,7 +200,7 @@ async function createTruckHandler(
         createdAt: admin.firestore.Timestamp.now(),
         status: "active",
         municipalCouncil,
-        district,
+        district: correctDistrict,
         ward,
         passwordChangeRequired: true,
         lastPasswordChange: admin.firestore.Timestamp.now(),
