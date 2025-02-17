@@ -21,6 +21,7 @@ async function createTruckHandler(
       ward,
       district,
       municipalCouncil,
+      email,
     } = req.body;
 
     if (
@@ -30,11 +31,42 @@ async function createTruckHandler(
       !supervisorId ||
       !ward ||
       !district ||
-      !municipalCouncil
+      !municipalCouncil ||
+      !email
     ) {
       res.status(400).json({
         success: false,
-        error: "Missing required fields",
+        error:
+          "Missing required fields. All fields including email are required.",
+      });
+      return;
+    }
+
+    const nicRegex = /^(?:\d{12}|\d{9}[vVxX])$/;
+    if (!nicRegex.test(nic)) {
+      res.status(400).json({
+        success: false,
+        error:
+          "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
+      });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({
+        success: false,
+        error: "Invalid email format",
+      });
+      return;
+    }
+
+    const plateRegex = /^[A-Z]{2,3}[-][0-9]{4}$/;
+    if (!plateRegex.test(numberPlate)) {
+      res.status(400).json({
+        success: false,
+        error:
+          "Invalid number plate format. Should be like 'XX-1234' or 'XXX-1234'",
       });
       return;
     }
@@ -81,6 +113,19 @@ async function createTruckHandler(
       return;
     }
 
+    const emailQuery = await supervisorRef
+      .collection("trucks")
+      .where("email", "==", email)
+      .get();
+
+    if (!emailQuery.empty) {
+      res.status(400).json({
+        success: false,
+        error: "A truck driver with this email already exists",
+      });
+      return;
+    }
+
     const truckId = `TRUCK${Math.random()
       .toString(36)
       .substr(2, 6)
@@ -92,8 +137,60 @@ async function createTruckHandler(
     try {
       const userRecord = await adminAuth.createUser({
         uid: truckId,
+        email: email,
+        emailVerified: true,
         password: initialPassword,
         displayName: driverName,
+        disabled: false,
+      });
+
+      await mcRef.collection("allNICs").doc(nic).set({
+        type: "truck",
+        truckId,
+        municipalCouncil,
+        district,
+        ward,
+        supervisorId,
+        email,
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+
+      await mcRef.collection("allPlates").doc(numberPlate).set({
+        truckId,
+        municipalCouncil,
+        district,
+        ward,
+        supervisorId,
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+
+      await supervisorRef.collection("trucks").doc(truckId).set({
+        driverName,
+        nic,
+        email,
+        numberPlate,
+        truckId,
+        supervisorId,
+        createdAt: admin.firestore.Timestamp.now(),
+        status: "active",
+        municipalCouncil,
+        district,
+        ward,
+        passwordChangeRequired: true,
+        lastPasswordChange: admin.firestore.Timestamp.now(),
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          truckId,
+          password: initialPassword,
+          driverName,
+          nic,
+          numberPlate,
+          supervisorId,
+          email,
+        },
       });
     } catch (authError: any) {
       console.error("Error creating auth user:", authError);
@@ -103,48 +200,6 @@ async function createTruckHandler(
       });
       return;
     }
-
-    await mcRef.collection("allNICs").doc(nic).set({
-      type: "truck",
-      truckId,
-      municipalCouncil,
-      district,
-      ward,
-      supervisorId,
-    });
-
-    await mcRef.collection("allPlates").doc(numberPlate).set({
-      truckId,
-      municipalCouncil,
-      district,
-      ward,
-      supervisorId,
-    });
-
-    await supervisorRef.collection("trucks").doc(truckId).set({
-      driverName,
-      nic,
-      numberPlate,
-      truckId,
-      supervisorId,
-      createdAt: admin.firestore.Timestamp.now(),
-      status: "active",
-      municipalCouncil,
-      district,
-      ward,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        truckId,
-        password: initialPassword,
-        driverName,
-        nic,
-        numberPlate,
-        supervisorId,
-      },
-    });
   } catch (error: any) {
     console.error("Error creating truck:", error);
     res.status(500).json({

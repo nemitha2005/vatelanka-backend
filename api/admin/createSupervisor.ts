@@ -13,12 +13,32 @@ async function createSupervisorHandler(
   }
 
   try {
-    const { name, nic, ward, district, municipalCouncil } = req.body;
+    const { name, nic, ward, district, municipalCouncil, email } = req.body;
 
-    if (!name || !nic || !ward || !district || !municipalCouncil) {
+    if (!name || !nic || !ward || !district || !municipalCouncil || !email) {
       res.status(400).json({
         success: false,
-        error: "Missing required fields",
+        error:
+          "Missing required fields. Name, NIC, ward, district, municipalCouncil, and email are required.",
+      });
+      return;
+    }
+
+    const nicRegex = /^(?:\d{12}|\d{9}[vVxX])$/;
+    if (!nicRegex.test(nic)) {
+      res.status(400).json({
+        success: false,
+        error:
+          "Invalid NIC format. Must be either 12 digits or 9 digits followed by V/X",
+      });
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({
+        success: false,
+        error: "Invalid email format",
       });
       return;
     }
@@ -64,6 +84,19 @@ async function createSupervisorHandler(
       return;
     }
 
+    const emailQuery = await wardRef
+      .collection("supervisors")
+      .where("email", "==", email)
+      .get();
+
+    if (!emailQuery.empty) {
+      res.status(400).json({
+        success: false,
+        error: "A supervisor with this email already exists",
+      });
+      return;
+    }
+
     const supervisorId = `SUP${Math.random()
       .toString(36)
       .substr(2, 6)
@@ -72,40 +105,58 @@ async function createSupervisorHandler(
       .toString(36)
       .substr(2, 4)}`;
 
-    const userRecord = await adminAuth.createUser({
-      uid: supervisorId,
-      password: initialPassword,
-      displayName: name,
-    });
-
-    await mcRef.collection("allNICs").doc(nic).set({
-      type: "supervisor",
-      supervisorId,
-      municipalCouncil,
-      district,
-      ward,
-    });
-
-    await wardRef.collection("supervisors").doc(supervisorId).set({
-      name,
-      nic,
-      supervisorId,
-      createdAt: admin.firestore.Timestamp.now(),
-      status: "active",
-      municipalCouncil,
-      district,
-      ward,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        supervisorId,
+    try {
+      const userRecord = await adminAuth.createUser({
+        uid: supervisorId,
+        email: email,
+        emailVerified: true,
         password: initialPassword,
+        displayName: name,
+        disabled: false,
+      });
+
+      await mcRef.collection("allNICs").doc(nic).set({
+        type: "supervisor",
+        supervisorId,
+        municipalCouncil,
+        district,
+        ward,
+        email,
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+
+      await wardRef.collection("supervisors").doc(supervisorId).set({
         name,
         nic,
-      },
-    });
+        email,
+        supervisorId,
+        createdAt: admin.firestore.Timestamp.now(),
+        status: "active",
+        municipalCouncil,
+        district,
+        ward,
+        passwordChangeRequired: true,
+        lastPasswordChange: admin.firestore.Timestamp.now(),
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          supervisorId,
+          password: initialPassword,
+          name,
+          nic,
+          email,
+        },
+      });
+    } catch (authError: any) {
+      console.error("Error in authentication creation:", authError);
+      res.status(500).json({
+        success: false,
+        error: "Failed to create authentication account",
+      });
+      return;
+    }
   } catch (error: any) {
     console.error("Error creating supervisor:", error);
     res.status(500).json({
