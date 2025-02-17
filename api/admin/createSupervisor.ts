@@ -60,39 +60,51 @@ async function createSupervisorHandler(
       return;
     }
 
-    const nameQuery = await wardRef
-      .collection("supervisors")
+    const globalNameQuery = await adminDb
+      .collectionGroup("supervisors")
       .where("name", "==", name)
       .get();
 
-    if (!nameQuery.empty) {
+    if (!globalNameQuery.empty) {
+      const existingSupervisor = globalNameQuery.docs[0].data();
       res.status(400).json({
         success: false,
-        error: "A supervisor with this name already exists in this ward",
+        error: `A supervisor with this name already exists in ${existingSupervisor.municipalCouncil}/${existingSupervisor.district}/${existingSupervisor.ward}`,
       });
       return;
     }
 
-    const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
-    const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
+    const globalEmailQuery = await adminDb
+      .collectionGroup("supervisors")
+      .where("email", "==", email)
+      .get();
+
+    if (!globalEmailQuery.empty) {
+      res.status(400).json({
+        success: false,
+        error: "This email is already registered in the system",
+      });
+      return;
+    }
+
+    const supervisorNicRef = adminDb.collection("supervisorNICs").doc(nic);
+    const nicSnapshot = await supervisorNicRef.get();
 
     if (nicSnapshot.exists) {
       res.status(400).json({
         success: false,
-        error: "A supervisor with this NIC already exists",
+        error: "This NIC is already registered as a supervisor",
       });
       return;
     }
 
-    const emailQuery = await wardRef
-      .collection("supervisors")
-      .where("email", "==", email)
-      .get();
+    const driverNicRef = adminDb.collection("driverNICs").doc(nic);
+    const driverNicSnapshot = await driverNicRef.get();
 
-    if (!emailQuery.empty) {
+    if (driverNicSnapshot.exists) {
       res.status(400).json({
         success: false,
-        error: "A supervisor with this email already exists",
+        error: "This NIC is already registered as a driver",
       });
       return;
     }
@@ -115,9 +127,9 @@ async function createSupervisorHandler(
         disabled: false,
       });
 
-      await mcRef.collection("allNICs").doc(nic).set({
-        type: "supervisor",
+      await supervisorNicRef.set({
         supervisorId,
+        name,
         municipalCouncil,
         district,
         ward,

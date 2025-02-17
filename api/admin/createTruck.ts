@@ -90,38 +90,62 @@ async function createTruckHandler(
       return;
     }
 
-    const mcRef = adminDb.collection("municipalCouncils").doc(municipalCouncil);
-
-    const nicSnapshot = await mcRef.collection("allNICs").doc(nic).get();
-    if (nicSnapshot.exists) {
-      res.status(400).json({
-        success: false,
-        error: "A driver with this NIC already exists",
-      });
-      return;
-    }
-
-    const plateSnapshot = await mcRef
-      .collection("allPlates")
-      .doc(numberPlate)
+    const globalNameQuery = await adminDb
+      .collectionGroup("trucks")
+      .where("driverName", "==", driverName)
       .get();
-    if (plateSnapshot.exists) {
+
+    if (!globalNameQuery.empty) {
+      const existingDriver = globalNameQuery.docs[0].data();
       res.status(400).json({
         success: false,
-        error: "A truck with this number plate already exists",
+        error: `A driver with this name already exists in ${existingDriver.municipalCouncil}/${existingDriver.district}/${existingDriver.ward}`,
       });
       return;
     }
 
-    const emailQuery = await supervisorRef
-      .collection("trucks")
+    const globalEmailQuery = await adminDb
+      .collectionGroup("trucks")
       .where("email", "==", email)
       .get();
 
-    if (!emailQuery.empty) {
+    if (!globalEmailQuery.empty) {
       res.status(400).json({
         success: false,
-        error: "A truck driver with this email already exists",
+        error: "This email is already registered in the system",
+      });
+      return;
+    }
+
+    const driverNicRef = adminDb.collection("driverNICs").doc(nic);
+    const driverNicSnapshot = await driverNicRef.get();
+
+    if (driverNicSnapshot.exists) {
+      res.status(400).json({
+        success: false,
+        error: "This NIC is already registered as a driver",
+      });
+      return;
+    }
+
+    const supervisorNicRef = adminDb.collection("supervisorNICs").doc(nic);
+    const supervisorNicSnapshot = await supervisorNicRef.get();
+
+    if (supervisorNicSnapshot.exists) {
+      res.status(400).json({
+        success: false,
+        error: "This NIC is already registered as a supervisor",
+      });
+      return;
+    }
+
+    const plateRef = adminDb.collection("vehiclePlates").doc(numberPlate);
+    const plateSnapshot = await plateRef.get();
+
+    if (plateSnapshot.exists) {
+      res.status(400).json({
+        success: false,
+        error: "This number plate is already registered in the system",
       });
       return;
     }
@@ -144,9 +168,9 @@ async function createTruckHandler(
         disabled: false,
       });
 
-      await mcRef.collection("allNICs").doc(nic).set({
-        type: "truck",
+      await driverNicRef.set({
         truckId,
+        driverName,
         municipalCouncil,
         district,
         ward,
@@ -155,8 +179,9 @@ async function createTruckHandler(
         createdAt: admin.firestore.Timestamp.now(),
       });
 
-      await mcRef.collection("allPlates").doc(numberPlate).set({
+      await plateRef.set({
         truckId,
+        driverName,
         municipalCouncil,
         district,
         ward,
