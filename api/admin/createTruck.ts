@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, adminAuth } from "../config/firebase-admin";
 import * as admin from "firebase-admin";
 import { cors } from "../middleware/cors";
+import { sendDriverCredentials } from "../config/emailService";
 
 async function createTruckHandler(
   req: VercelRequest,
@@ -162,6 +163,21 @@ async function createTruckHandler(
       district,
       ward,
     });
+
+    try {
+      await sendDriverCredentials({
+        driverName,
+        email,
+        truckId,
+        password: initialPassword,
+        numberPlate,
+        ward,
+        district,
+        municipalCouncil,
+      });
+    } catch (emailError) {
+      console.error("Failed to send email but user was created:", emailError);
+    }
 
     res.status(200).json({
       success: true,

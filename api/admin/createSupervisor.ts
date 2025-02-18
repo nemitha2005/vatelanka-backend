@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { adminDb, adminAuth } from "../config/firebase-admin";
 import * as admin from "firebase-admin";
 import { cors } from "../middleware/cors";
+import { sendSupervisorCredentials } from "../config/emailService";
 
 async function createSupervisorHandler(
   req: VercelRequest,
@@ -123,6 +124,20 @@ async function createSupervisorHandler(
       district,
       ward,
     });
+
+    try {
+      await sendSupervisorCredentials({
+        name,
+        email,
+        supervisorId,
+        password: initialPassword,
+        ward,
+        district,
+        municipalCouncil,
+      });
+    } catch (emailError) {
+      console.error("Failed to send email but user was created:", emailError);
+    }
 
     res.status(200).json({
       success: true,
