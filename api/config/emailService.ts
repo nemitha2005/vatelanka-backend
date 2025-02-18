@@ -139,7 +139,7 @@ export async function sendSupervisorCredentials(
 ): Promise<void> {
   try {
     await transporter.sendMail({
-      from: `"Waste Management System" <${process.env.SMTP_USER}>`,
+      from: `"VateLanka - Waste Management System" <${process.env.SMTP_USER}>`,
       to: data.email,
       subject: "Your Supervisor Account Credentials",
       html: supervisorEmailTemplate(data),
@@ -156,7 +156,7 @@ export async function sendDriverCredentials(
 ): Promise<void> {
   try {
     await transporter.sendMail({
-      from: `"Waste Management System" <${process.env.SMTP_USER}>`,
+      from: `"VateLanka - Waste Management System" <${process.env.SMTP_USER}>`,
       to: data.email,
       subject: "Your Driver Account Credentials",
       html: driverEmailTemplate(data),
