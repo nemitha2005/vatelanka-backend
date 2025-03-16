@@ -14,9 +14,18 @@ async function createSupervisorHandler(
   }
 
   try {
-    const { name, nic, ward, district, municipalCouncil, email } = req.body;
+    const { name, nic, ward, district, municipalCouncil, email, phoneNumber } =
+      req.body;
 
-    if (!name || !nic || !ward || !district || !municipalCouncil || !email) {
+    if (
+      !name ||
+      !nic ||
+      !ward ||
+      !district ||
+      !municipalCouncil ||
+      !email ||
+      !phoneNumber
+    ) {
       res.status(400).json({
         success: false,
         error: "Missing required fields",
@@ -29,6 +38,16 @@ async function createSupervisorHandler(
       res.status(400).json({
         success: false,
         error: "Invalid email format",
+      });
+      return;
+    }
+
+    const phoneRegex = /^\d{10}$/;
+    const cleanedPhoneNumber = phoneNumber.replace(/\D/g, "");
+    if (!phoneRegex.test(cleanedPhoneNumber)) {
+      res.status(400).json({
+        success: false,
+        error: "Phone number must be exactly 10 digits",
       });
       return;
     }
@@ -102,6 +121,9 @@ async function createSupervisorHandler(
       email: email,
       password: initialPassword,
       displayName: name,
+      phoneNumber: phoneNumber.startsWith("+")
+        ? phoneNumber
+        : `+94${cleanedPhoneNumber.substring(1)}`,
     });
 
     await mcRef.collection("allNICs").doc(nic).set({
@@ -111,12 +133,14 @@ async function createSupervisorHandler(
       district,
       ward,
       email,
+      phoneNumber: cleanedPhoneNumber,
     });
 
     await wardRef.collection("supervisors").doc(supervisorId).set({
       name,
       nic,
       email,
+      phoneNumber: cleanedPhoneNumber,
       supervisorId,
       createdAt: admin.firestore.Timestamp.now(),
       status: "active",
@@ -134,6 +158,7 @@ async function createSupervisorHandler(
         ward,
         district,
         municipalCouncil,
+        phoneNumber: cleanedPhoneNumber,
       });
     } catch (emailError) {
       console.error("Failed to send email but user was created:", emailError);
@@ -147,6 +172,7 @@ async function createSupervisorHandler(
         name,
         nic,
         email,
+        phoneNumber: cleanedPhoneNumber,
       },
     });
   } catch (error: any) {

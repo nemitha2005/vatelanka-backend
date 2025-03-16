@@ -8,6 +8,7 @@ interface SupervisorEmailData {
   ward: string;
   district: string;
   municipalCouncil: string;
+  phoneNumber?: string;
 }
 
 interface DriverEmailData {
@@ -19,6 +20,7 @@ interface DriverEmailData {
   ward: string;
   district: string;
   municipalCouncil: string;
+  phoneNumber?: string;
 }
 
 const transporter = nodemailer.createTransport({
@@ -53,13 +55,22 @@ const supervisorEmailTemplate = (data: SupervisorEmailData): string => {
                             <li>Municipal Council: ${data.municipalCouncil}</li>
                             <li>District: ${data.district}</li>
                             <li>Ward: ${data.ward}</li>
+                            ${
+                              data.phoneNumber
+                                ? `<li>Phone Number: ${data.phoneNumber}</li>`
+                                : ""
+                            }
                         </ul>
                     </div>
 
                     <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0; border: 2px solid #e74c3c;">
                         <p style="margin: 5px 0; color: #e74c3c;"><strong>Your Login Credentials:</strong></p>
-                        <p style="margin: 5px 0;">User ID: <strong>${data.supervisorId}</strong></p>
-                        <p style="margin: 5px 0;">Password: <strong>${data.password}</strong></p>
+                        <p style="margin: 5px 0;">User ID: <strong>${
+                          data.supervisorId
+                        }</strong></p>
+                        <p style="margin: 5px 0;">Password: <strong>${
+                          data.password
+                        }</strong></p>
                     </div>
 
                     <div style="background-color: #fff4e6; padding: 15px; border-radius: 5px; margin: 15px 0;">
@@ -106,13 +117,22 @@ const driverEmailTemplate = (data: DriverEmailData): string => {
                             <li>District: ${data.district}</li>
                             <li>Ward: ${data.ward}</li>
                             <li>Vehicle Number: ${data.numberPlate}</li>
+                            ${
+                              data.phoneNumber
+                                ? `<li>Phone Number: ${data.phoneNumber}</li>`
+                                : ""
+                            }
                         </ul>
                     </div>
 
                     <div style="background-color: #fff; padding: 15px; border-radius: 5px; margin: 15px 0; border: 2px solid #e74c3c;">
                         <p style="margin: 5px 0; color: #e74c3c;"><strong>Your Login Credentials:</strong></p>
-                        <p style="margin: 5px 0;">User ID: <strong>${data.truckId}</strong></p>
-                        <p style="margin: 5px 0;">Password: <strong>${data.password}</strong></p>
+                        <p style="margin: 5px 0;">User ID: <strong>${
+                          data.truckId
+                        }</strong></p>
+                        <p style="margin: 5px 0;">Password: <strong>${
+                          data.password
+                        }</strong></p>
                     </div>
 
                     <div style="background-color: #fff4e6; padding: 15px; border-radius: 5px; margin: 15px 0;">

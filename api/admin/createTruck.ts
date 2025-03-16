@@ -23,6 +23,7 @@ async function createTruckHandler(
       district,
       municipalCouncil,
       email,
+      phoneNumber,
     } = req.body;
 
     if (
@@ -33,7 +34,8 @@ async function createTruckHandler(
       !ward ||
       !district ||
       !municipalCouncil ||
-      !email
+      !email ||
+      !phoneNumber
     ) {
       res.status(400).json({
         success: false,
@@ -47,6 +49,16 @@ async function createTruckHandler(
       res.status(400).json({
         success: false,
         error: "Invalid email format",
+      });
+      return;
+    }
+
+    const phoneRegex = /^\d{10}$/;
+    const cleanedPhoneNumber = phoneNumber.replace(/\D/g, "");
+    if (!phoneRegex.test(cleanedPhoneNumber)) {
+      res.status(400).json({
+        success: false,
+        error: "Phone number must be exactly 10 digits",
       });
       return;
     }
@@ -122,6 +134,9 @@ async function createTruckHandler(
         email: email,
         password: initialPassword,
         displayName: driverName,
+        phoneNumber: phoneNumber.startsWith("+")
+          ? phoneNumber
+          : `+94${cleanedPhoneNumber.substring(1)}`,
       });
     } catch (authError: any) {
       console.error("Error creating auth user:", authError);
@@ -140,6 +155,7 @@ async function createTruckHandler(
       ward,
       supervisorId,
       email,
+      phoneNumber: cleanedPhoneNumber,
     });
 
     await mcRef.collection("allPlates").doc(numberPlate).set({
@@ -154,6 +170,7 @@ async function createTruckHandler(
       driverName,
       nic,
       email,
+      phoneNumber: cleanedPhoneNumber,
       numberPlate,
       truckId,
       supervisorId,
@@ -174,6 +191,7 @@ async function createTruckHandler(
         ward,
         district,
         municipalCouncil,
+        phoneNumber: cleanedPhoneNumber,
       });
     } catch (emailError) {
       console.error("Failed to send email but user was created:", emailError);
@@ -187,6 +205,7 @@ async function createTruckHandler(
         driverName,
         nic,
         email,
+        phoneNumber: cleanedPhoneNumber,
         numberPlate,
         supervisorId,
       },
